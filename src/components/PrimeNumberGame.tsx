@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 
 // Define types for bubbles
@@ -11,8 +11,14 @@ interface Bubble {
     left: string;
     top: string;
   };
-  speed: number;
+  speed: {
+    x: number;
+    y: number;
+  };
   color: string;
+  isPopping?: boolean;
+  isPrimePopping?: boolean;
+  isNonPrimePopping?: boolean;
 }
 
 const PrimeNumberGame: React.FC = () => {
@@ -24,6 +30,8 @@ const PrimeNumberGame: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState<number>(60);
   const [gameOver, setGameOver] = useState<boolean>(false);
   const [explanation, setExplanation] = useState<boolean>(true);
+  const gameAreaRef = useRef<HTMLDivElement>(null);
+  const animationFrameRef = useRef<number>(0);
 
   // Generate a random number between min and max
   const randomNumber = (min: number, max: number): number => {
@@ -54,7 +62,13 @@ const PrimeNumberGame: React.FC = () => {
       left: randomNumber(10, 80) + "%",
       top: randomNumber(10, 80) + "%",
     };
-    const speed = randomNumber(3, 7);
+
+    // Create random but gentle speed for X and Y directions
+    const speed = {
+      x: (Math.random() - 0.5) * 1.5, // -0.75 to 0.75
+      y: (Math.random() - 0.5) * 1.5, // -0.75 to 0.75
+    };
+
     // All bubbles get random colors regardless of whether they contain prime numbers
     const color = `hsla(${randomNumber(0, 360)}, 80%, 70%, 0.8)`;
 
@@ -77,32 +91,143 @@ const PrimeNumberGame: React.FC = () => {
       initialBubbles.push(createBubble());
     }
     setBubbles(initialBubbles);
+
+    // Start animation loop
+    startAnimationLoop();
   };
 
   // Handle bubble click
   const handleBubbleClick = (number: number, id: number): void => {
-    if (isPrime(number)) {
-      setScore(score + 10);
-      setMessage(`Good job! ${number} is a prime number!`);
+    const isPrimeNumber = isPrime(number);
 
-      // Level up when score reaches certain thresholds
-      if (score + 10 >= level * 50) {
-        setLevel((prevLevel) => prevLevel + 1);
-        setMessage(
-          `Level up! Now look for prime numbers up to ${(level + 1) * 10}`,
-        );
-        // No bonus time for level up anymore
+    // First, mark the bubble as popping with the correct animation type
+    setBubbles((prevBubbles) =>
+      prevBubbles.map((bubble) =>
+        bubble.id === id
+          ? {
+              ...bubble,
+              isPopping: true,
+              isPrimePopping: isPrimeNumber,
+              isNonPrimePopping: !isPrimeNumber,
+            }
+          : bubble,
+      ),
+    );
+
+    // Wait a short time for the animation to play before removing the bubble
+    setTimeout(() => {
+      if (isPrimeNumber) {
+        setScore(score + 10);
+        setMessage(`Good job! ${number} is a prime number!`);
+
+        // Level up when score reaches certain thresholds
+        if (score + 10 >= level * 50) {
+          setLevel((prevLevel) => prevLevel + 1);
+          setMessage(
+            `Level up! Now look for prime numbers up to ${(level + 1) * 10}`,
+          );
+        }
+      } else {
+        setScore(Math.max(0, score - 5));
+        setMessage(`Oops! ${number} is not a prime number.`);
       }
-    } else {
-      setScore(Math.max(0, score - 5));
-      setMessage(`Oops! ${number} is not a prime number.`);
-    }
 
-    // Remove clicked bubble and add a new one
-    setBubbles((prevBubbles) => {
-      const filteredBubbles = prevBubbles.filter((bubble) => bubble.id !== id);
-      return [...filteredBubbles, createBubble()];
-    });
+      // Remove clicked bubble and add a new one
+      setBubbles((prevBubbles) => {
+        const filteredBubbles = prevBubbles.filter(
+          (bubble) => bubble.id !== id,
+        );
+        return [...filteredBubbles, createBubble()];
+      });
+    }, 500); // Wait 500ms for the animation to play
+  };
+
+  // Animation loop for moving bubbles
+  const animateBubbles = () => {
+    if (!gameAreaRef.current || gameOver || !gameStarted) return;
+
+    const gameArea = gameAreaRef.current;
+    const gameAreaRect = gameArea.getBoundingClientRect();
+    const gameWidth = gameAreaRect.width;
+    const gameHeight = gameAreaRect.height;
+
+    setBubbles((prevBubbles) =>
+      prevBubbles.map((bubble) => {
+        // Skip animation for popping bubbles
+        if (bubble.isPopping) return bubble;
+
+        // Get current position in pixels
+        const bubbleElement = document.getElementById(`bubble-${bubble.id}`);
+        if (!bubbleElement) return bubble;
+
+        const bubbleRect = bubbleElement.getBoundingClientRect();
+
+        // Current position as percentage
+        let leftPercent = parseFloat(bubble.position.left);
+        let topPercent = parseFloat(bubble.position.top);
+
+        // Convert percentage to pixels
+        let leftPx = (leftPercent / 100) * gameWidth;
+        let topPx = (topPercent / 100) * gameHeight;
+
+        // Update position in pixels
+        leftPx += bubble.speed.x;
+        topPx += bubble.speed.y;
+
+        // Handle boundary collisions
+        if (leftPx <= 0 || leftPx >= gameWidth - bubbleRect.width) {
+          // Reverse x direction
+          return {
+            ...bubble,
+            speed: {
+              ...bubble.speed,
+              x: -bubble.speed.x,
+            },
+            position: {
+              left:
+                Math.max(0, Math.min(100, (leftPx / gameWidth) * 100)) + "%",
+              top: bubble.position.top,
+            },
+          };
+        }
+
+        if (topPx <= 0 || topPx >= gameHeight - bubbleRect.height) {
+          // Reverse y direction
+          return {
+            ...bubble,
+            speed: {
+              ...bubble.speed,
+              y: -bubble.speed.y,
+            },
+            position: {
+              left: bubble.position.left,
+              top: Math.max(0, Math.min(100, (topPx / gameHeight) * 100)) + "%",
+            },
+          };
+        }
+
+        // Convert back to percentage
+        leftPercent = (leftPx / gameWidth) * 100;
+        topPercent = (topPx / gameHeight) * 100;
+
+        return {
+          ...bubble,
+          position: {
+            left: leftPercent + "%",
+            top: topPercent + "%",
+          },
+        };
+      }),
+    );
+
+    animationFrameRef.current = requestAnimationFrame(animateBubbles);
+  };
+
+  const startAnimationLoop = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    animationFrameRef.current = requestAnimationFrame(animateBubbles);
   };
 
   // Game timer
@@ -111,12 +236,19 @@ const PrimeNumberGame: React.FC = () => {
     let bubbleTimer: NodeJS.Timeout | undefined;
 
     if (gameStarted && !gameOver) {
+      // Start animation
+      startAnimationLoop();
+
       timer = setInterval(() => {
         setTimeLeft((prevTime) => {
           if (prevTime <= 1) {
             if (timer) clearInterval(timer);
             if (bubbleTimer) clearInterval(bubbleTimer);
             setGameOver(true);
+            // Stop animation when game is over
+            if (animationFrameRef.current) {
+              cancelAnimationFrame(animationFrameRef.current);
+            }
             return 0;
           }
           return prevTime - 1;
@@ -134,8 +266,11 @@ const PrimeNumberGame: React.FC = () => {
     return () => {
       if (timer) clearInterval(timer);
       if (bubbleTimer) clearInterval(bubbleTimer);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
     };
-  }, [gameStarted, gameOver, bubbles.length]);
+  }, [gameStarted, gameOver]);
 
   return (
     <div className="h-screen bg-gradient-to-b from-blue-200 to-purple-200 flex flex-col items-center justify-center p-4 overflow-hidden font-sans relative">
@@ -226,12 +361,20 @@ const PrimeNumberGame: React.FC = () => {
             </div>
           )}
 
-          <div className="relative w-full h-full">
+          <div ref={gameAreaRef} className="relative w-full h-full">
             {bubbles.map((bubble) => (
               <div
+                id={`bubble-${bubble.id}`}
                 key={bubble.id}
-                onClick={() => handleBubbleClick(bubble.number, bubble.id)}
-                className="absolute rounded-full flex items-center justify-center cursor-pointer transform transition-all hover:scale-110"
+                onClick={() =>
+                  !bubble.isPopping &&
+                  handleBubbleClick(bubble.number, bubble.id)
+                }
+                className={`absolute rounded-full flex items-center justify-center cursor-pointer
+                  ${bubble.isPopping ? "pointer-events-none" : "transform transition-transform hover:scale-110"}
+                  ${bubble.isPrimePopping ? "animate-correct-pop" : ""}
+                  ${bubble.isNonPrimePopping ? "animate-wrong-pop" : ""}
+                `}
                 style={{
                   width: `${bubble.size}px`,
                   height: `${bubble.size}px`,
@@ -240,6 +383,7 @@ const PrimeNumberGame: React.FC = () => {
                   top: bubble.position.top,
                   boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
                   border: "2px solid white",
+                  transition: "transform 0.2s",
                 }}
               >
                 <span className="text-2xl font-bold text-white">
@@ -253,6 +397,9 @@ const PrimeNumberGame: React.FC = () => {
             onClick={() => {
               setGameStarted(false);
               setExplanation(true);
+              if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+              }
             }}
             className="absolute bottom-4 right-4 bg-white p-2 rounded-full shadow-md"
           >
