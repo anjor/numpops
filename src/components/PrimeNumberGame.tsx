@@ -270,7 +270,7 @@ const PrimeNumberGame: React.FC = () => {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [gameStarted, gameOver]);
+  }, [gameStarted, gameOver, bubbles.length, createBubble, startAnimationLoop]);
 
   return (
     <div className="h-screen bg-gradient-to-b from-blue-200 to-purple-200 flex flex-col items-center justify-center p-4 overflow-hidden font-sans relative">
