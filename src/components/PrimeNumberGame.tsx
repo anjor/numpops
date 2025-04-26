@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { X } from "lucide-react";
 
 // Define types for bubbles
@@ -34,9 +34,9 @@ const PrimeNumberGame: React.FC = () => {
   const animationFrameRef = useRef<number>(0);
 
   // Generate a random number between min and max
-  const randomNumber = (min: number, max: number): number => {
+  const randomNumber = useCallback((min: number, max: number): number => {
     return Math.floor(Math.random() * (max - min + 1)) + min;
-  };
+  }, []);
 
   // Check if a number is prime
   const isPrime = (num: number): boolean => {
@@ -53,7 +53,7 @@ const PrimeNumberGame: React.FC = () => {
   };
 
   // Create a new bubble
-  const createBubble = (): Bubble => {
+  const createBubble = useCallback((): Bubble => {
     const maxNumber = level * 10;
     const number = randomNumber(1, maxNumber);
     const id = Date.now() + Math.random();
@@ -73,7 +73,7 @@ const PrimeNumberGame: React.FC = () => {
     const color = `hsla(${randomNumber(0, 360)}, 80%, 70%, 0.8)`;
 
     return { id, number, size, position, speed, color };
-  };
+  }, [level, randomNumber]);
 
   // Start the game
   const startGame = (): void => {
@@ -143,7 +143,7 @@ const PrimeNumberGame: React.FC = () => {
   };
 
   // Animation loop for moving bubbles
-  const animateBubbles = () => {
+  const animateBubbles = useCallback(() => {
     if (!gameAreaRef.current || gameOver || !gameStarted) return;
 
     const gameArea = gameAreaRef.current;
@@ -221,14 +221,14 @@ const PrimeNumberGame: React.FC = () => {
     );
 
     animationFrameRef.current = requestAnimationFrame(animateBubbles);
-  };
+  }, [gameStarted, gameOver]);
 
-  const startAnimationLoop = () => {
+  const startAnimationLoop = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
     animationFrameRef.current = requestAnimationFrame(animateBubbles);
-  };
+  }, [animateBubbles]);
 
   // Game timer
   useEffect(() => {
@@ -307,7 +307,7 @@ const PrimeNumberGame: React.FC = () => {
               <li>Click on the bubbles with prime numbers</li>
               <li>Each correct bubble gives you 10 points</li>
               <li>Wrong clicks cost 5 points</li>
-              <li>As you level up, you'll see bigger numbers</li>
+              <li>As you level up, you will see bigger numbers</li>
               <li>Try to get the highest score before time runs out!</li>
             </ul>
           </div>
