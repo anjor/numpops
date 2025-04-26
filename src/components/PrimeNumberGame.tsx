@@ -283,7 +283,7 @@ const PrimeNumberGame: React.FC = () => {
             <p className="mb-3">
               <span className="font-bold">What are prime numbers?</span> Prime
               numbers are special numbers that can only be divided by 1 and
-              themselves.
+              themselves. 1 is not a prime number.
             </p>
 
             <p className="mb-3">For example:</p>
